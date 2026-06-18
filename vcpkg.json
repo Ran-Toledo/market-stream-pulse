@@ -1,0 +1,13 @@
+{
+  "name": "market-stream-pulse",
+  "version": "0.1.0",
+  "builtin-baseline": "e6ed7c5be05eaedc2d06ee3e51bd059409429c5e",
+  "dependencies": [
+    "boost-asio",
+    "boost-beast",
+    "boost-system",
+    "boost-thread",
+    "openssl",
+    "nlohmann-json"
+  ]
+}
