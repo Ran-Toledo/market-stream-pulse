@@ -60,11 +60,10 @@ Connects to live **Binance public WebSocket trade streams** for multiple symbols
 
 ### Known MVP limitations
 
-1. **Symbol lookup stack copy** — `symbolIdCI()` lowercases the symbol into a 33-byte stack buffer before the hash lookup. No heap allocation, but a small per-message copy. **TODO**: store symbols pre-lowercased so the copy is eliminated entirely.
-2. **Mutex-based queues** — `BoundedBlockingQueue` uses `std::mutex` + `std::condition_variable`. **TODO**: replace with a lock-free MPMC ring buffer.
-3. **Single reconnect** — reconnect has a 3-second hardcoded delay and no exponential backoff. **TODO**: add jittered exponential backoff.
-4. **No p50/p95/p99** — latency metrics use a simple count/sum/max accumulator. **TODO**: integrate HDR histogram.
-5. **Wall-clock exchange lag** — the estimated exchange lag assumes the local clock is reasonably synced (within ~100 ms). No NTP validation is performed.
+1. **Mutex-based queues** — `BoundedBlockingQueue` uses `std::mutex` + `std::condition_variable`. **TODO**: replace with a lock-free MPMC ring buffer.
+2. **Single reconnect** — reconnect has a 3-second hardcoded delay and no exponential backoff. **TODO**: add jittered exponential backoff.
+3. **No p50/p95/p99** — latency metrics use a simple count/sum/max accumulator. **TODO**: integrate HDR histogram.
+4. **Wall-clock exchange lag** — the estimated exchange lag assumes the local clock is reasonably synced (within ~100 ms). No NTP validation is performed.
 
 ---
 

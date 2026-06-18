@@ -14,9 +14,10 @@ public:
 
     explicit SymbolRegistry(const std::vector<std::string>& symbols);
 
-    // Hot-path lookup: accepts "btcusdt" or "BTCUSDT" via string_view.
-    // Uses heterogeneous hash — no std::string constructed on the hot path.
-    uint32_t symbolIdCI(std::string_view sv) const;
+    // Hot-path lookup by uppercase symbol (e.g. "BTCUSDT").
+    // Transparent hash: string_view passed directly — no std::string constructed,
+    // no case transformation. Callers must pass an uppercase symbol.
+    uint32_t symbolId(std::string_view sv) const;
 
     // Returns empty string if id is out of range.
     const std::string& symbolName(uint32_t id) const;

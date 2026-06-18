@@ -36,7 +36,7 @@ bool BinanceTradeParser::parse(const RawMessage& raw, TradeEvent& out) const {
     // Symbol — string_view into the raw buffer, no copy
     std::string_view sym;
     if (data["s"].get(sym)) return false;
-    uint32_t sid = registry_.symbolIdCI(sym);
+    uint32_t sid = registry_.symbolId(sym);
     if (sid == SymbolRegistry::kInvalidId) return false;
 
     // Trade ID
