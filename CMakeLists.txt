@@ -15,7 +15,7 @@ set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems
 # -----------------------------------------------------------------------------
 find_package(Boost REQUIRED COMPONENTS system thread)
 find_package(OpenSSL REQUIRED)
-find_package(nlohmann_json REQUIRED)
+find_package(simdjson CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 # -----------------------------------------------------------------------------
@@ -42,7 +42,7 @@ target_link_libraries(market_stream_pulse
         Boost::thread
         OpenSSL::SSL
         OpenSSL::Crypto
-        nlohmann_json::nlohmann_json
+        simdjson::simdjson
         Threads::Threads
 )
 

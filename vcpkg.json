@@ -8,6 +8,6 @@
     "boost-system",
     "boost-thread",
     "openssl",
-    "nlohmann-json"
+    "simdjson"
   ]
 }

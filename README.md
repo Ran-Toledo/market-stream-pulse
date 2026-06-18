@@ -60,7 +60,7 @@ Connects to live **Binance public WebSocket trade streams** for multiple symbols
 
 ### Known MVP limitations
 
-1. **JSON allocation** — `nlohmann::json::parse()` allocates internally. The application-level pipeline avoids dynamic allocation, but the parser library does not. **TODO**: replace with `simdjson` on-demand parser or a hand-written field extractor.
+1. **Symbol lookup stack copy** — `symbolIdCI()` lowercases the symbol into a 33-byte stack buffer before the hash lookup. No heap allocation, but a small per-message copy. **TODO**: store symbols pre-lowercased so the copy is eliminated entirely.
 2. **Mutex-based queues** — `BoundedBlockingQueue` uses `std::mutex` + `std::condition_variable`. **TODO**: replace with a lock-free MPMC ring buffer.
 3. **Single reconnect** — reconnect has a 3-second hardcoded delay and no exponential backoff. **TODO**: add jittered exponential backoff.
 4. **No p50/p95/p99** — latency metrics use a simple count/sum/max accumulator. **TODO**: integrate HDR histogram.
@@ -77,7 +77,7 @@ Connects to live **Binance public WebSocket trade streams** for multiple symbols
 | vcpkg | bundled as a git submodule — no separate install needed |
 | OpenSSL | fetched and built by vcpkg |
 | Boost.Asio / Beast | fetched and built by vcpkg |
-| nlohmann/json | fetched and built by vcpkg |
+| simdjson | fetched and built by vcpkg |
 
 ---
 
@@ -173,7 +173,7 @@ Per-Symbol:
 
 ## Optimization roadmap (TODOs)
 
-1. **Replace nlohmann/json** with `simdjson` on-demand API — eliminates internal allocations, 3–5× faster parse.
+1. **Eliminate symbol lowercase copy** — store symbols pre-lowercased in `SymbolRegistry` so `symbolIdCI` needs no stack buffer transformation.
 2. **Lock-free queues** — replace `BoundedBlockingQueue` with a MPMC ring buffer (e.g. `moodycamel::ConcurrentQueue` or a custom power-of-2 ring buffer with atomic head/tail).
 3. **Per-thread metric counters** — reduce atomic contention by accumulating metrics thread-locally and flushing to shared counters once per interval.
 4. **Latency histograms** — add p50/p95/p99 using HDR Histogram (`hdrhistogram_c` or a C++ port).
