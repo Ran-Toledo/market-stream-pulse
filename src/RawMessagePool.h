@@ -29,8 +29,9 @@ private:
     };
 
     uint32_t capacity_;
-    // Backing store — allocated once at startup.
-    std::vector<Node> nodes_;
+    // Backing store — unique_ptr<Node[]> default-constructs in-place,
+    // avoiding the copy/move that std::vector requires (std::atomic is neither).
+    std::unique_ptr<Node[]> nodes_;
     // Lock-free stack head.
     std::atomic<Node*> head_{nullptr};
 

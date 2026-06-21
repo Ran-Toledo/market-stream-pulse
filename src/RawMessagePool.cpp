@@ -5,7 +5,7 @@ RawMessagePool::RawMessagePool(uint32_t capacity)
     : capacity_(capacity)
 {
     if (capacity == 0) throw std::invalid_argument("Pool capacity must be > 0");
-    nodes_.resize(capacity);  // single allocation at startup
+    nodes_ = std::make_unique<Node[]>(capacity);  // single allocation at startup
 
     // Push all nodes onto the free stack
     for (uint32_t i = 0; i < capacity; ++i) {

@@ -12,12 +12,47 @@
 #include <stdexcept>
 #include <string>
 
+#ifdef _WIN32
+#include <openssl/x509.h>
+#include <openssl/ssl.h>
+#include <wincrypt.h>
+#endif
+
 namespace asio  = boost::asio;
 namespace beast = boost::beast;
 namespace http  = beast::http;
 namespace ws    = beast::websocket;
 namespace ssl   = asio::ssl;
 using tcp       = asio::ip::tcp;
+
+// ---------------------------------------------------------------------------
+// Windows: load trusted root certificates from the Windows certificate store
+// into an OpenSSL SSL_CTX.  On non-Windows platforms set_default_verify_paths
+// works correctly.
+// ---------------------------------------------------------------------------
+#ifdef _WIN32
+static void loadWindowsCertificates(ssl::context& ctx) {
+    HCERTSTORE hStore = CertOpenSystemStore(0, "ROOT");
+    if (!hStore) {
+        std::cerr << "[WS] Warning: could not open Windows ROOT certificate store\n";
+        return;
+    }
+
+    X509_STORE* store = X509_STORE_new();
+    PCCERT_CONTEXT pContext = nullptr;
+    while ((pContext = CertEnumCertificatesInStore(hStore, pContext)) != nullptr) {
+        const unsigned char* encoded = pContext->pbCertEncoded;
+        X509* x509 = d2i_X509(nullptr, &encoded,
+                               static_cast<long>(pContext->cbCertEncoded));
+        if (x509) {
+            X509_STORE_add_cert(store, x509);
+            X509_free(x509);
+        }
+    }
+    CertCloseStore(hStore, 0);
+    SSL_CTX_set_cert_store(ctx.native_handle(), store);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Pimpl — hides all Boost.Beast types from the header
@@ -41,9 +76,13 @@ BinanceWebSocketClient::BinanceWebSocketClient(
     , metrics_(metrics)
     , impl_(std::make_unique<Impl>())
 {
-    // Accept server certificates using the default platform cert store.
-    impl_->sslCtx.set_default_verify_paths();
     impl_->sslCtx.set_verify_mode(ssl::verify_peer);
+
+#ifdef _WIN32
+    loadWindowsCertificates(impl_->sslCtx);
+#else
+    impl_->sslCtx.set_default_verify_paths();
+#endif
 }
 
 BinanceWebSocketClient::~BinanceWebSocketClient() {
@@ -57,8 +96,6 @@ void BinanceWebSocketClient::start() {
 
 void BinanceWebSocketClient::stop() {
     running_.store(false);
-    // Best-effort: try to close the websocket so the synchronous read unblocks.
-    // If already disconnected this is a no-op.
     if (impl_->wss) {
         beast::error_code ec;
         impl_->wss->close(ws::close_code::normal, ec);
@@ -68,14 +105,31 @@ void BinanceWebSocketClient::stop() {
 
 // ---------------------------------------------------------------------------
 void BinanceWebSocketClient::run() {
+    static constexpr int kMaxInitialAttempts = 3;
+    int  attempts     = 0;
+    bool everConnected = false;
+
     while (running_.load()) {
         try {
             connect();
-            doRead();           // blocks until stream ends or error
+            everConnected = true;
+            attempts = 0;
+            doRead();
         } catch (const std::exception& e) {
             connected_.store(false);
             metrics_.connected.store(false);
             std::cerr << "[WS] Error: " << e.what() << "\n";
+
+            if (!everConnected) {
+                ++attempts;
+                if (attempts >= kMaxInitialAttempts) {
+                    std::cerr << "[WS] Failed to connect after " << kMaxInitialAttempts
+                              << " attempts. Giving up.\n";
+                    connectionFailed_.store(true);
+                    running_.store(false);
+                    return;
+                }
+            }
         }
 
         if (!running_.load()) break;
@@ -84,7 +138,6 @@ void BinanceWebSocketClient::run() {
         std::cerr << "[WS] Reconnecting in 3 seconds...\n";
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        // Reset the io_context and rebuild the stream for a clean reconnect.
         impl_->ioc.restart();
         impl_->wss.reset();
         impl_->readBuf.clear();
@@ -100,20 +153,15 @@ void BinanceWebSocketClient::connect() {
 
     auto sock = std::make_unique<ws::stream<ssl::stream<tcp::socket>>>(ioc, sslCtx);
 
-    // TCP connect
-    auto ep = asio::connect(beast::get_lowest_layer(*sock), results);
-    (void)ep;
+    asio::connect(beast::get_lowest_layer(*sock), results);
 
-    // SNI
     if (!SSL_set_tlsext_host_name(sock->next_layer().native_handle(),
                                    cfg_.binanceHost.c_str())) {
         throw std::runtime_error("SSL_set_tlsext_host_name failed");
     }
 
-    // TLS handshake
     sock->next_layer().handshake(ssl::stream_base::client);
 
-    // WebSocket handshake
     std::string hostHeader = cfg_.binanceHost + ":" + cfg_.binancePort;
     sock->set_option(ws::stream_base::decorator([](ws::request_type& req) {
         req.set(http::field::user_agent, "MarketStreamPulse/1.0");
@@ -149,7 +197,7 @@ void BinanceWebSocketClient::doRead() {
             return;
         }
 
-        if (!wss.got_text()) continue;  // ignore binary frames
+        if (!wss.got_text()) continue;
 
         const char* data = static_cast<const char*>(buf.data().data());
         size_t      len  = buf.size();

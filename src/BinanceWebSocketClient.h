@@ -25,12 +25,14 @@ public:
 
     bool isConnected() const { return connected_.load(std::memory_order_relaxed); }
 
+    // True if initial connection attempts were exhausted before ever connecting.
+    bool hasFailed() const { return connectionFailed_.load(std::memory_order_relaxed); }
+
 private:
-    void run();         // io_context thread entry point
+    void run();
     void connect();
     void doRead();
     void handleFrame(const char* data, size_t len);
-    void scheduleReconnect();
 
     const AppConfig& cfg_;
     RawMessagePool& pool_;
@@ -39,6 +41,7 @@ private:
 
     std::atomic<bool> running_{false};
     std::atomic<bool> connected_{false};
+    std::atomic<bool> connectionFailed_{false};
     std::thread thread_;
 
     // Beast/Asio objects are heap-allocated so the header doesn't pull

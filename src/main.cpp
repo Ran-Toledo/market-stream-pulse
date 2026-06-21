@@ -129,6 +129,28 @@ int main() {
     wsClient.start();
 
     // ------------------------------------------------------------------
+    // Wait for initial connection — exit if it never establishes
+    // ------------------------------------------------------------------
+    {
+        std::printf("[main] Waiting for initial connection...\n");
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+        while (!wsClient.isConnected() && !wsClient.hasFailed()) {
+            if (std::chrono::steady_clock::now() >= deadline) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        if (!wsClient.isConnected()) {
+            std::fprintf(stderr, "[main] Could not connect. Shutting down.\n");
+            wsClient.stop();
+            rawQueue.close();
+            for (auto& t : parserThreads) t.join();
+            parsedQueue.close();
+            aggregator.stop();
+            return 1;
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Reporting loop — runs on main thread
     // ------------------------------------------------------------------
     auto nextReport = std::chrono::steady_clock::now() +
